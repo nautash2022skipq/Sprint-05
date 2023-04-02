@@ -10,6 +10,7 @@ from aws_cdk import (
     aws_cloudwatch_actions as cw_actions_,
     aws_dynamodb as dynamo_,
     aws_codedeploy as codedeploy_,
+    aws_apigateway as api_gw_,
     Stack,
     RemovalPolicy,
 )
@@ -24,7 +25,7 @@ class NautashAhmadStack(Stack):
         role = self.create_lambda_role()
         
         fn = self.create_lambda("WebHealthLambda", "./resources", "WebHealthAppLambda.lambda_handler", 
-            role, 2
+            role, 5
         )
         
         # Adding metrics for lambda to monitor it
@@ -119,6 +120,48 @@ class NautashAhmadStack(Stack):
             # https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_cloudwatch_actions/SnsAction.html
             availability_alarm.add_alarm_action(cw_actions_.SnsAction(topic))
             latency_alarm.add_alarm_action(cw_actions_.SnsAction(topic))
+            
+        '''
+            Creating DynamoDB table, DynamoDB lambda handler and API Gateway for REST API endpoints for CRUD Operations
+        '''
+        # Creating lambda for GW dynamo handler
+        gw_dynamo_lambda = self.create_lambda("NautashAhmadApiGatewayCrudDynamoLambda", "./resources", "ApiGatewayCrudDynamoLambda.lambda_handler", 
+            role, 5
+        )
+        
+        # Creating DynamoDB table for API Gateway CRUD Operations
+        gw_dynamo_table = self.create_dynamodb_table('NautashAhmadApiGatewayCRUDTable', 'id')
+        gw_dynamo_table.grant_full_access(gw_dynamo_lambda)
+        
+        # Adding environment variable to Lambda
+        # https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_lambda/Function.html#aws_cdk.aws_lambda.Function.add_environment
+        gw_dynamo_lambda.add_environment('tableName', gw_dynamo_table.table_name)
+        
+        # Creating API Gateway
+        gw = self.create_rest_api_gateway('NautashAhmadRestApiGateway')
+        
+        # https://docs.aws.amazon.com/cdk/api/v1/python/aws_cdk.aws_apigateway/LambdaIntegration.html
+        handler = api_gw_.LambdaIntegration(gw_dynamo_lambda)
+        
+        resource_name = 'urls'
+        
+        # https://docs.aws.amazon.com/cdk/api/v1/python/aws_cdk.aws_apigateway/Method.html
+        # Authorization type: https://docs.aws.amazon.com/cdk/api/v1/python/aws_cdk.aws_apigateway/AuthorizationType.html
+        # Integration: https://docs.aws.amazon.com/cdk/api/v1/python/aws_cdk.aws_apigateway/Integration.html#aws_cdk.aws_apigateway.Integration
+        gw_resource = gw.root.add_resource(resource_name)
+        gw_resource.add_method('GET', handler, authorization_type=api_gw_.AuthorizationType.NONE, api_key_required=False)
+        gw_resource.add_method('POST', handler, authorization_type=api_gw_.AuthorizationType.NONE, api_key_required=False)
+        gw_resource.add_method('PUT', handler, authorization_type=api_gw_.AuthorizationType.NONE, api_key_required=False)
+        gw_resource.add_method('DELETE', handler, authorization_type=api_gw_.AuthorizationType.NONE, api_key_required=False)
+        
+        # Constructing REST API Gateway URL
+        # https://docs.aws.amazon.com/apigateway/latest/developerguide/create-api-resources-methods.html
+        # https://docs.aws.amazon.com/cdk/api/v1/python/aws_cdk.aws_apigateway/RestApiAttributes.html#aws_cdk.aws_apigateway.RestApiAttributes.rest_api_id
+        api_gateway_url = 'https://' + gw.rest_api_id + '.execute-api.' + self.region + '.amazonaws.com/prod/' + resource_name
+        
+        # Adding environment variable to lambda function
+        # https://docs.aws.amazon.com/cdk/api/v1/python/aws_cdk.aws_lambda/Function.html#aws_cdk.aws_lambda.Function.add_environment
+        fn.add_environment('apiGatewayUrl', api_gateway_url)
         
         
     # Create Lambda construct
@@ -173,11 +216,28 @@ class NautashAhmadStack(Stack):
         
     # Create AWS DynamoDB table
     # https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_dynamodb/Table.html
-    def create_dynamodb_table(self, id, partition_key, sort_key):
-        return dynamo_.Table(self, 
+    def create_dynamodb_table(self, id, partition_key, sort_key=None):
+        attr = {
+            'id': id,
+            'partition_key': dynamo_.Attribute(name=partition_key, type=dynamo_.AttributeType.STRING),
+            'billing_mode': dynamo_.BillingMode.PAY_PER_REQUEST,
+            'removal_policy': RemovalPolicy.DESTROY,
+        }
+        
+        # Optionally adding sort key to DynamoDB
+        if sort_key:
+            attr.update({'sort_key': dynamo_.Attribute(name=sort_key, type=dynamo_.AttributeType.STRING)})
+        
+        # Unpacking dictionary items
+        return dynamo_.Table(self,
+            **attr
+        )
+        
+        
+    # Create REST API Gateway
+    # https://docs.aws.amazon.com/cdk/api/v1/python/aws_cdk.aws_apigateway/RestApi.html
+    def create_rest_api_gateway(self, id):
+        return api_gw_.RestApi(self, 
             id=id,
-            partition_key=dynamo_.Attribute(name=partition_key, type=dynamo_.AttributeType.STRING),
-            sort_key=dynamo_.Attribute(name=sort_key, type=dynamo_.AttributeType.STRING),
-            billing_mode=dynamo_.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.DESTROY,
+            endpoint_types=[api_gw_.EndpointType.REGIONAL]
         )

@@ -1,4 +1,4 @@
-import urllib3, datetime
+import os, json, urllib3, datetime
 from CloudWatch import AWSCloudWatch
 from constants import (
     URLS,
@@ -13,7 +13,18 @@ def lambda_handler(event, context):
     # Creating AWS CloudWatch object
     cw_obj = AWSCloudWatch()
     
-    for url in URLS:
+    # Getting environment variable passed from the stack to lambda construct
+    api_gw_url = os.environ['apiGatewayUrl']
+    print(api_gw_url)
+    
+    urls = getUrlsFromDynamo(api_gw_url)
+    print(urls)
+    
+    if not urls:
+        print('Reading constant URLS')
+        urls = URLS
+    
+    for url in urls:
         availability = getAvailability(url)
         latency = getLactency(url)
                 
@@ -49,3 +60,23 @@ def getLactency(url):
     latency = round(diff.microseconds * .000001, 6)
     
     return latency
+
+
+def getUrlsFromDynamo(url):
+    http = urllib3.PoolManager()
+    res = http.request("GET", url)
+    
+    urls = []
+    if res.status == 200:
+        data = res.data
+        
+        # https://stackoverflow.com/questions/40059654/convert-a-bytes-array-into-json-format
+        data = data.decode('utf8').replace("'", '"')
+        data = json.loads(data)
+        
+        for record in data:
+            for k, v in record.items():
+                if k == 'url':
+                    urls.append(v)
+                    
+    return urls
