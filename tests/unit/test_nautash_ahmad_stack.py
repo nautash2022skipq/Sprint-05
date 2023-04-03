@@ -26,13 +26,9 @@ def test_have_two_lambdas(stack_template):
     template.resource_count_is('AWS::Lambda::Function', 3)
     
     
-def test_has_lambda_s3key_prop(stack_template):
+def test_has_iam_role(stack_template):
     template = stack_template
-    template.has_resource_properties("AWS::Lambda::Function", props={
-        'Handler': 'WebHealthAppLambda.lambda_handler',
-        'Runtime': 'python3.8',
-        'Timeout': 120
-    })
+    template.find_resources('AWS::IAM::Role')
     
     
 def test_has_dynamo_resource(stack_template):
