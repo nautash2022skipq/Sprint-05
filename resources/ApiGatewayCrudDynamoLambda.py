@@ -15,7 +15,7 @@ def lambda_handler(event, context):
     
     print(f'Path: {path} ------- httpMethod: {httpMethod}')
     
-    if path == '/testUrls' and httpMethod == 'GET' and not queryStringParameters:
+    if path == '/urls' and httpMethod == 'GET' and not queryStringParameters:
         try:
             # https://dynobase.dev/dynamodb-python-with-boto3/#scan
             data = table.scan()['Items']
@@ -31,7 +31,7 @@ def lambda_handler(event, context):
                 'statusCode': 501,
             })
         
-    elif path == '/testUrls' and httpMethod == 'GET' and queryStringParameters:
+    elif path == '/urls' and httpMethod == 'GET' and queryStringParameters:
         try:
             id = queryStringParameters['id']
             
@@ -53,7 +53,7 @@ def lambda_handler(event, context):
                 'statusCode': 501,
             })
         
-    elif path == '/testUrls' and httpMethod == 'POST':
+    elif path == '/urls' and httpMethod == 'POST':
         try:
             body = json.loads(event['body'])
             url = body['url']
@@ -77,7 +77,7 @@ def lambda_handler(event, context):
                 'statusCode': 501,
             })
         
-    elif path == '/testUrls' and httpMethod == 'PUT':
+    elif path == '/urls' and httpMethod == 'PUT':
         try:
             body = json.loads(event['body'])
         
@@ -112,7 +112,7 @@ def lambda_handler(event, context):
                 'statusCode': 501,
             })
         
-    elif path == '/testUrls' and httpMethod == 'DELETE' and queryStringParameters:
+    elif path == '/urls' and httpMethod == 'DELETE' and queryStringParameters:
         try:
             id = queryStringParameters['id']
             
