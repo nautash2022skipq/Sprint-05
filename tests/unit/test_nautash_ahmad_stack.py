@@ -23,7 +23,7 @@ def stack_template():
 
 def test_have_two_lambdas(stack_template):
     template = stack_template
-    template.resource_count_is('AWS::Lambda::Function', 2)
+    template.resource_count_is('AWS::Lambda::Function', 3)
     
     
 def test_has_lambda_s3key_prop(stack_template):
